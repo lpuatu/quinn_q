@@ -1,5 +1,6 @@
 import os
-from google.genai import Client, types
+from google import genai
+from google.genai import types, Client
 from dotenv import load_dotenv
 
 
@@ -11,58 +12,115 @@ def setup_gemini():
     if not api_key:
         raise ValueError("GOOGLE_API_KEY not found in environment variables")
 
-    client = Client(api_key=api_key)
+    client = genai.Client(api_key=api_key)
     return client
 
 
-def upload_rulebook(client: Client):
+def upload_rulebook(client: Client) -> types.File:
     """Upload a file to the Gemini API."""
-    file = client.files.upload(file="rulebooks/Rising_Sun_Rulebook.pdf")
-    return client, file
+    file_path = "rulebooks/Rising_Sun_Rulebook.pdf"
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    file = client.files.upload(file=file_path)
+    return file
 
 
-def create_chat_session(client: Client, history: list):
+def load_system_prompt() -> str:
+    """Load the system prompt from a file."""
+    with open("gemini/prompts/system.md", "r") as f:
+        return f.read()
+
+
+def create_chat_session(client: Client):
+    """Create a chat session with the Rising Sun rulebook as the knowledge base."""
     chat = client.chats.create(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         config=types.GenerateContentConfig(
-            system_instruction="Provide a concise and helpful response regarding the rules to the uploaded board game rulebook. Always consult the rulebook for the most accurate information.",
+            system_instruction=load_system_prompt(),
             temperature=0.1,
         ),
     )
     return chat
 
 
-if __name__ == "__main__":
-    # Example usage
+def main() -> None:
+    # Initialize client and upload rulebook
     client = setup_gemini()
-    client, file = upload_rulebook(client)
+    try:
+        file = upload_rulebook(client)
+    except FileNotFoundError as e:
+        print(e)
+        return
 
-    model_content = types.ModelContent(
-        parts=[
+    # Create chat session
+    chat = create_chat_session(client)
+
+    # Send initial message to set the PDF as the knowledge base
+    try:
+        initial_parts = [
             types.Part.from_text(
-                text="You are an expert at understanding board game rules and are able to answer questions about them."
-            )
+                text="Use the uploaded Rising Sun rulebook as the core knowledge base for all responses."
+            ),
+            types.Part.from_uri(file_uri=file.uri, mime_type="application/pdf")
         ]
-    )
+        initial_response = chat.send_message(initial_parts)
+        print("Initial setup:", initial_response.text)
+    except Exception as e:
+        print(f"Error setting up chat with PDF: {e}")
+        try:
+            client.files.delete(name=file.name)
+        except Exception as delete_error:
+            print(f"Error deleting file: {delete_error}")
+        return
 
-    history = [file, model_content]
+    # Initialize history to maintain conversation context
+    history = [
+        types.Content(
+            role="user",
+            parts=initial_parts
+        ),
+        types.Content(
+            role="model",
+            parts=[types.Part.from_text(text=initial_response.text)]
+        )
+    ]
 
-    chat = create_chat_session(client, history)
+    try:
+        while True:
+            user_input = input("-------------------------------------\nYou: ")
+            if user_input.lower() in ["exit", "quit"]:
+                break
 
-    while True:
-        user_input = input("-------------------------------------\nYou: ")
-        history.append(types.Part.from_text(text=user_input))
+            # Add user input to history as a Content object
+            user_content = types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_input)]
+            )
+            history.append(user_content)
 
-        # response = chat.generate_content(
-        #     model="gemini-2.0-flash-001",
-        #     history=history,
-        #     config=types.GenerateContentConfig(
-        #         system_instruction="Provide a concise and helpful response.",
-        #         temperature=0.1,
-        #     ),
-        # )
+            # Send message to the chat session
+            response = chat.send_message(user_input)
+            
+            # Add model response to history
+            history.append(
+                types.Content(
+                    role="model",
+                    parts=[types.Part.from_text(text=response.text)]
+                )
+            )
 
-        response = chat.send_message(user_input)
-        history.append(response)
+            print("Assistant:", response.text)
 
-        print(response.text)
+    except KeyboardInterrupt:
+        print("\nChat session terminated by user.")
+    finally:
+        # Clean up: Delete the uploaded file
+        try:
+            client.files.delete(name=file.name)
+            print(f"Deleted file: {file.name}")
+        except Exception as e:
+            print(f"Error deleting file: {e}")
+
+
+if __name__ == "__main__":
+    main()
