@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quinn-q-frontend
+  namespace: quinn-q
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quinn-q-frontend
+  template:
+    metadata:
+      labels:
+        app: quinn-q-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: your-dockerhub-username/quinn-q-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80

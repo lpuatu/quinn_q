@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quinn-q-backend
+  namespace: quinn-q
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quinn-q-backend
+  template:
+    metadata:
+      labels:
+        app: quinn-q-backend
+    spec:
+      containers:
+        - name: backend
+          image: your-dockerhub-username/quinn-q-backend:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: quinnq-secrets
+          ports:
+            - containerPort: 8000
+          command: ["uvicorn"]
+          args: ["server:app", "--host", "0.0.0.0", "--port", "8000"]

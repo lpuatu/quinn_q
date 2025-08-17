@@ -1,0 +1,22 @@
+[project]
+name = "quinn-q"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "logan.puatu",email = "loganjpuatu@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "google (>=3.0.0,<4.0.0)",
+    "python-dotenv (>=1.0.1,<2.0.0)",
+    "google-genai (>=1.28.0,<2.0.0)",
+    "fastapi (>=0.115.0,<1.0.0)",
+    "uvicorn[standard] (>=0.30.0,<1.0.0)",
+    "black (>=25.1.0,<26.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
